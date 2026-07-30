@@ -10,7 +10,10 @@ type Meta struct {
 }
 
 func NewMeta(baseURL string, resourceType ResourceType) Meta {
-	return resourceType.Meta(baseURL)
+	return Meta{
+		ResourceType: resourceType.Name,
+		Location:     resourceType.Location(baseURL),
+	}
 }
 
 func (m Meta) For(r Resource) Meta {

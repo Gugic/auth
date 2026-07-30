@@ -80,6 +80,7 @@ func (ts *SCIMUsersTestSuite) TestGetUser() {
 			"id": %q,
 			"userName": %q,
 			"emails": [{"value": %q, "primary": true}],
+			"active": true,
 			"meta": {
 				"resourceType": "User",
 				"created": %q,
@@ -138,6 +139,18 @@ func (ts *SCIMUsersTestSuite) TestGetUser() {
 		require.NotContains(ts.T(), w.Body.String(), "engineering")
 	})
 
+	ts.Run("reports a banned user as inactive", func() {
+		user := seedSCIMUser(ts.T(), ts.API.db, ts.TenantA.provider, "banned@"+ts.TenantA.domain)
+		bannedUntil := time.Now().Add(24 * time.Hour)
+		user.BannedUntil = &bannedUntil
+		require.NoError(ts.T(), ts.API.db.UpdateOnly(user, "banned_until"))
+
+		w := ts.get(user.ID.String(), ts.TenantA.token)
+
+		require.Equal(ts.T(), http.StatusOK, w.Code)
+		require.Contains(ts.T(), w.Body.String(), `"active":false`)
+	})
+
 	ts.Run("identifies the resource by user id, not by the NameID", func() {
 		opaque := seedSCIMUser(ts.T(), ts.API.db, ts.TenantA.provider, "persistent@"+ts.TenantA.domain, map[string]interface{}{
 			"sub": uuid.Must(uuid.NewV4()).String(),
@@ -173,6 +186,7 @@ func (ts *SCIMUsersTestSuite) TestGetUser() {
 				"middleName": "Jane"
 			},
 			"emails": [{"value": "bjensen@example.com", "primary": true}],
+			"active": true,
 			"meta": {
 				"resourceType": "User",
 				"created": %q,

@@ -20,6 +20,6 @@ func NewServiceProviderConfig(baseURL string, schemes ...*AuthenticationScheme) 
 	return &ServiceProviderConfig{
 		Schemas:               []SchemaURI{SchemaServiceProviderConfig},
 		AuthenticationSchemes: schemes,
-		Meta:                  ResourceTypeServiceProviderConfig.Meta(baseURL),
+		Meta:                  NewMeta(baseURL, ResourceTypeServiceProviderConfig),
 	}
 }

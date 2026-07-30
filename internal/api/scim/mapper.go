@@ -29,6 +29,7 @@ func (m UserMapper) MapFrom(in *models.ProvisionedUser) *core.User {
 			MiddleName: in.Claim("middle_name"),
 		},
 		Emails: []core.Email{{Value: in.PrimaryEmail(), Primary: true}},
-		Meta:   in.ResourceType().Meta(m.baseURL).For(in),
+		Active: !in.IsBanned(),
+		Meta:   core.NewMeta(m.baseURL, in.ResourceType()).For(in),
 	}
 }
