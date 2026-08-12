@@ -31,6 +31,26 @@ type SAMLConfiguration struct {
 
 	ExternalURL string `json:"external_url,omitempty" split_words:"true"`
 
+	// AcsURL overrides the Assertion Consumer Service URL that is otherwise derived from
+	// ExternalURL as "<url>/sso/saml/acs".
+	//
+	// Needed when SAML responses reach GoTrue at an endpoint that already existed: the ACS URL is
+	// named INSIDE the signed assertion (SubjectConfirmationData/@Recipient, Response/@Destination),
+	// so crewjam/saml compares those against this value. Routing or rewriting the request cannot
+	// change them, and re-signing is not an option, so the only way to accept an assertion addressed
+	// to a legacy endpoint is to tell GoTrue that endpoint is its ACS.
+	//
+	// Also used outbound: it is the AssertionConsumerServiceURL of the AuthnRequest and the ACS
+	// Location in the published SP metadata, so all three stay consistent.
+	AcsURL string `json:"acs_url,omitempty" split_words:"true"`
+
+	// EntityID overrides the SP entity id, which otherwise defaults to the metadata URL.
+	//
+	// The IdP checks it twice: as the assertion's AudienceRestriction, and as the Issuer of the
+	// AuthnRequest it receives. Both have to match the SP entity id registered at the IdP, so an SP
+	// serving IdPs that were configured against a different identifier needs to keep announcing it.
+	EntityID string `json:"entity_id,omitempty" split_words:"true"`
+
 	RateLimitAssertion float64 `default:"15" split_words:"true"`
 }
 
@@ -88,6 +108,13 @@ func (c *SAMLConfiguration) Validate() error {
 
 		if c.ExternalURL != "" {
 			_, err := url.ParseRequestURI(c.ExternalURL)
+			if err != nil {
+				return err
+			}
+		}
+
+		if c.AcsURL != "" {
+			_, err := url.ParseRequestURI(c.AcsURL)
 			if err != nil {
 				return err
 			}
