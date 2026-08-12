@@ -44,7 +44,13 @@ func (p SSOProvider) Type() string {
 }
 
 func (p *SSOProvider) UpdateSCIMToken(token string) {
+	if token == "" {
+		p.SCIMTokenHash = nil
+		return
+	}
 	hash := toSHA256(token)
+	p.SCIMTokenHash = &hash
+}
 	p.SCIMTokenHash = &hash
 }
 
