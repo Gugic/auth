@@ -33,6 +33,7 @@ func (a *API) newSAMLServiceProvider(identityProvider *saml.EntityDescriptor, id
 
 	provider := samlsp.DefaultServiceProvider(samlsp.Options{
 		URL:               *u,
+		EntityID:          a.config.SAML.EntityID,
 		Key:               key,
 		Certificate:       cert,
 		SignRequest:       true,
@@ -41,6 +42,18 @@ func (a *API) newSAMLServiceProvider(identityProvider *saml.EntityDescriptor, id
 	})
 
 	provider.AuthnNameIDFormat = saml.PersistentNameIDFormat
+
+	// AcsURL is derived from URL inside DefaultServiceProvider, so it can only be overridden after
+	// construction. Parsed rather than stored pre-parsed to keep SAMLConfiguration free of
+	// non-serialisable fields; SAMLConfiguration.Validate has already rejected a malformed value at
+	// boot, so the panic mirrors the one above and is unreachable in a configured process.
+	if a.config.SAML.AcsURL != "" {
+		acsURL, err := url.ParseRequestURI(a.config.SAML.AcsURL)
+		if err != nil {
+			panic(err)
+		}
+		provider.AcsURL = *acsURL
+	}
 
 	return &provider
 }
