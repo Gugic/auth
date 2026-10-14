@@ -148,6 +148,42 @@ func TestSAMLAssertionUserID(t *tst.T) {
 	}
 }
 
+func TestSAMLAssertionEmail(t *tst.T) {
+	withNameID := func(format, value string, attrs ...saml.Attribute) SAMLAssertion {
+		a := &saml.Assertion{Subject: &saml.Subject{NameID: &saml.NameID{Format: format, Value: value}}}
+		if len(attrs) > 0 {
+			a.AttributeStatements = []saml.AttributeStatement{{Attributes: attrs}}
+		}
+		return SAMLAssertion{a}
+	}
+	attr := func(name, value string) saml.Attribute {
+		return saml.Attribute{Name: name, Values: []saml.AttributeValue{{Value: value}}}
+	}
+
+	examples := []struct {
+		desc      string
+		assertion SAMLAssertion
+		email     string
+	}{
+		{"emailAddress NameID", withNameID(string(saml.EmailAddressNameIDFormat), "user@example.com"), "user@example.com"},
+		{"unspecified NameID holding an email", withNameID(string(saml.UnspecifiedNameIDFormat), "user@example.com"), "user@example.com"},
+		{"SAML 1.0 unspecified NameID holding an email", withNameID("urn:oasis:names:tc:SAML:1.0:nameid-format:unspecified", "user@example.com"), "user@example.com"},
+		{"persistent NameID holding an email", withNameID(string(saml.PersistentNameIDFormat), "user@example.com"), "user@example.com"},
+		{"NameID without a format holding an email", withNameID("", " user@example.com "), "user@example.com"},
+		{"unspecified NameID that is not an email", withNameID(string(saml.UnspecifiedNameIDFormat), "jdoe"), ""},
+		{"persistent opaque NameID", withNameID(string(saml.PersistentNameIDFormat), "00u1abcd2EFGH3ijk4l5"), ""},
+		{"transient NameID holding an email", withNameID(string(saml.TransientNameIDFormat), "user@example.com"), ""},
+		{"email attribute wins over the NameID", withNameID(string(saml.UnspecifiedNameIDFormat), "nameid@example.com", attr("email", "attr@example.com")), "attr@example.com"},
+		{"no NameID", SAMLAssertion{&saml.Assertion{Subject: &saml.Subject{}}}, ""},
+		{"no Subject", SAMLAssertion{&saml.Assertion{}}, ""},
+		{"no Subject, email attribute", SAMLAssertion{&saml.Assertion{AttributeStatements: []saml.AttributeStatement{{Attributes: []saml.Attribute{attr("mail", "attr@example.com")}}}}}, "attr@example.com"},
+	}
+
+	for _, example := range examples {
+		require.Equal(t, example.email, example.assertion.Email(), example.desc)
+	}
+}
+
 func TestSAMLAssertionProcessing(t *tst.T) {
 	type spec struct {
 		desc     string

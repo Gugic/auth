@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/badoux/checkmail"
 	"github.com/crewjam/saml"
 	"github.com/supabase/auth/internal/models"
 )
@@ -107,8 +108,23 @@ func (a *SAMLAssertion) Email() string {
 		}
 	}
 
+	if a.Subject == nil || a.Subject.NameID == nil {
+		return ""
+	}
+
 	if a.Subject.NameID.Format == string(saml.EmailAddressNameIDFormat) {
 		return a.Subject.NameID.Value
+	}
+
+	// Many IdPs (JumpCloud by default) send the email as a NameID of the
+	// unspecified format with no email attribute, so any NameID that is a
+	// well-formed email address counts. A transient NameID changes with every
+	// assertion and never names the user.
+	if a.Subject.NameID.Format != string(saml.TransientNameIDFormat) {
+		value := strings.TrimSpace(a.Subject.NameID.Value)
+		if len(value) <= 255 && checkmail.ValidateFormat(value) == nil {
+			return value
+		}
 	}
 
 	return ""
