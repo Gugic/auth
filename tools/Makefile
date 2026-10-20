@@ -7,6 +7,8 @@ BIN_TARGETS := \
 .PHONY: all
 all: $(BIN_TARGETS)
 
+$(BIN_TARGETS): go.mod go.sum
+
 $(BIN_DIR)/gosec: | $(BIN_DIR)
 	GOBIN=$(BIN_DIR) go install github.com/securego/gosec/v2/cmd/gosec
 

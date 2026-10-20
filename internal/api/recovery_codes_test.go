@@ -36,6 +36,9 @@ type RecoveryCodesTestSuite struct {
 }
 
 func TestRecoveryCodes(t *testing.T) {
+	// Argon2 checks under race and coverage instrumentation can exceed the
+	// production deadline. This suite tests recovery-code state transitions.
+	t.Setenv("GOTRUE_API_MAX_REQUEST_DURATION", "2m")
 	mockMailer := &mockclient.MockMailer{}
 	api, config, err := setupAPIForTest(WithMailer(mockMailer))
 	require.NoError(t, err)
