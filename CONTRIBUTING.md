@@ -59,15 +59,7 @@ Therefore, to contribute to Auth you will need to install these tools.
 
 ### Install Tools
 
-- Install [Go](https://go.dev) 1.22
-
-```zsh
-# Via Homebrew on macOS
-brew install go@1.22
-
-# Set the environment variable in the ~/.zshrc file
-echo 'export PATH="/opt/homebrew/opt/go@1.22/bin:$PATH"' >> ~/.zshrc
-```
+- Install the Go version pinned in `go.mod` using the [official installer](https://go.dev/doc/install).
 
 - Install [Docker](https://www.docker.com/get-started)
 

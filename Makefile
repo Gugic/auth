@@ -124,7 +124,7 @@ check-go-version: ## Verify the pinned Go version matches across go.mod, Dockerf
 	./hack/check-go-version.sh
 
 .NOTPARALLEL: $(TOOL_TARGETS)
-$(TOOL_TARGETS):
+$(TOOL_TARGETS): tools/go.mod tools/go.sum
 	$(MAKE) -C tools
 
 sec: | $(TOOL_BIN_DIR)/gosec # Check for security vulnerabilities
