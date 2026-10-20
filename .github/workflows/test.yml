@@ -13,7 +13,7 @@ permissions:
 jobs:
   test_postgres:
     name: Test / Postgres
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:15
@@ -67,7 +67,7 @@ jobs:
 
   test_oriole:
     name: Test / OrioleDB
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: orioledb/orioledb:beta16-pre-2-pg17
@@ -99,7 +99,7 @@ jobs:
 
   test_multigres:
     name: Test / Multigres
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       postgres:
