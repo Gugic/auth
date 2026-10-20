@@ -70,6 +70,7 @@ func TruncateAll(conn *storage.Connection) error {
 			(&pop.Model{Value: SAMLRelayState{}}).TableName(),
 			(&pop.Model{Value: FlowState{}}).TableName(),
 			(&pop.Model{Value: OneTimeToken{}}).TableName(),
+			(&pop.Model{Value: EmailOTPAttempt{}}).TableName(),
 			(&pop.Model{Value: OAuthServerClient{}}).TableName(),
 			(&pop.Model{Value: CustomOAuthProvider{}}).TableName(),
 			(&pop.Model{Value: WebAuthnCredential{}}).TableName(),

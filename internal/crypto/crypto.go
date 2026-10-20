@@ -46,6 +46,13 @@ func GenerateTokenHash(emailOrPhone, otp string) string {
 	return fmt.Sprintf("%x", sha256.Sum224([]byte(emailOrPhone+otp)))
 }
 
+// GenerateLinkToken creates an email-link credential independent of the OTP.
+func GenerateLinkToken() string {
+	var token [32]byte
+	_ = must(rand.Read(token[:]))
+	return fmt.Sprintf("%x", token[:])
+}
+
 // Generated a random secure integer from [0, max[
 func secureRandomInt(max int) int {
 	randomInt := must(rand.Int(rand.Reader, big.NewInt(int64(max))))

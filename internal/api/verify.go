@@ -226,9 +226,32 @@ func (a *API) verifyGet(w http.ResponseWriter, r *http.Request, params *VerifyPa
 	return nil
 }
 
-func (a *API) verifyPost(w http.ResponseWriter, r *http.Request, params *VerifyParams) error {
+func (a *API) verifyPost(w http.ResponseWriter, r *http.Request, params *VerifyParams) (responseErr error) {
 	ctx := r.Context()
 	db := a.db.WithContext(ctx)
+	_, _, emailType := emailOTPTokenTypes(params.Type)
+	if params.Token != "" && isEmailOtpVerification(params) && emailType {
+		key := emailOTPBudgetKey(a.requestAud(ctx, r), params.Email)
+		window, allowed, err := models.ReserveEmailOTPAttempt(db, key, a.config.Mailer.OtpMaxAttempts, a.config.Mailer.OtpAttemptWindow)
+		if err != nil {
+			return apierrors.NewInternalServerError("Unable to verify email code")
+		}
+		if !allowed {
+			return apierrors.NewForbiddenError(apierrors.ErrorCodeOTPExpired, "Token has expired or is invalid")
+		}
+		// The reservation commits outside the authentication transaction: a wrong
+		// guess must survive that transaction's rollback. In-flight guesses also
+		// spend budget, so parallel requests cannot overshoot it.
+		defer func() {
+			var failure *HTTPError
+			if errors.As(responseErr, &failure) && failure.ErrorCode == apierrors.ErrorCodeOTPExpired {
+				return
+			}
+			if err := models.ReleaseEmailOTPAttempt(db, key, window); err != nil {
+				logrus.Warn("Unable to release email OTP attempt reservation")
+			}
+		}()
+	}
 
 	var (
 		user        *models.User
@@ -667,6 +690,17 @@ func (a *API) verifyTokenHash(conn *storage.Connection, params *VerifyParams) (*
 		return nil, apierrors.NewInternalServerError("Database error finding user from email link").WithInternalError(err)
 	}
 
+	user, err = models.LockUserForEmailVerification(conn, user.ID)
+	if err != nil {
+		return nil, apierrors.NewInternalServerError("Database error verifying email link")
+	}
+	first, second, _ := emailOTPTokenTypes(params.Type)
+	if _, err = models.FindOneTimeToken(conn, params.TokenHash, first, second); err != nil {
+		if models.IsNotFoundError(err) {
+			return nil, apierrors.NewForbiddenError(apierrors.ErrorCodeOTPExpired, "Email link is invalid or has expired")
+		}
+		return nil, apierrors.NewInternalServerError("Database error verifying email link")
+	}
 	if user.IsBanned() {
 		return nil, apierrors.NewForbiddenError(apierrors.ErrorCodeUserBanned, "User is banned")
 	}
@@ -699,6 +733,18 @@ func (a *API) verifyTokenHash(conn *storage.Connection, params *VerifyParams) (*
 // verifyUserAndToken verifies the token associated to the user based on the verify type
 func (a *API) verifyUserAndToken(conn *storage.Connection, params *VerifyParams, aud string) (*models.User, error) {
 	config := a.config
+	if first, second, ok := emailOTPTokenTypes(params.Type); ok && isEmailOtpVerification(params) {
+		ott, err := models.FindEmailTokenByOTP(conn, params.Email, aud, params.TokenHash, first, second)
+		if err == nil {
+			params.TokenHash = ott.TokenHash
+			return a.verifyTokenHash(conn, params)
+		}
+		if !models.IsNotFoundError(err) {
+			return nil, apierrors.NewInternalServerError("Database error finding email code")
+		}
+		// Codes issued by older binaries remain usable until their original
+		// expiry. Their stored token is still checked below, under this budget.
+	}
 
 	var user *models.User
 	var err error
@@ -729,6 +775,12 @@ func (a *API) verifyUserAndToken(conn *storage.Connection, params *VerifyParams,
 	}
 
 	var isValid bool
+	if isEmailOtpVerification(params) {
+		user, err = models.LockUserForEmailVerification(conn, user.ID)
+		if err != nil {
+			return nil, apierrors.NewInternalServerError("Database error verifying email code")
+		}
+	}
 
 	smsProvider, _ := sms_provider.GetSmsProvider(*config)
 	switch params.Type {

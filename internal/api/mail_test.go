@@ -236,8 +236,8 @@ func (ts *MailTestSuite) TestGenerateLink() {
 			// check if redirect_to is correct
 			require.Equal(ts.T(), c.ExpectedResponse["redirect_to"], data["redirect_to"])
 
-			// check if hashed_token matches hash function of email and the raw otp
-			require.Equal(ts.T(), crypto.GenerateTokenHash(c.Body.Email, data["email_otp"].(string)), data["hashed_token"])
+			require.NotEqual(ts.T(), crypto.GenerateTokenHash(c.Body.Email, data["email_otp"].(string)), data["hashed_token"])
+			require.Len(ts.T(), data["hashed_token"].(string), 64)
 
 			// check if the host used in the email link matches the initial request host
 			u, err := url.ParseRequestURI(data["action_link"].(string))

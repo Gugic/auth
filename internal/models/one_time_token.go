@@ -110,6 +110,7 @@ type OneTimeToken struct {
 	TokenType OneTimeTokenType `json:"token_type" db:"token_type"`
 
 	TokenHash string `json:"token_hash" db:"token_hash"`
+	OTPHash   string `json:"-" db:"otp_hash"`
 	RelatesTo string `json:"relates_to" db:"relates_to"`
 
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
@@ -133,6 +134,10 @@ func ClearOneTimeTokenForUser(tx *storage.Connection, userID uuid.UUID, tokenTyp
 }
 
 func CreateOneTimeToken(tx *storage.Connection, userID uuid.UUID, relatesTo, tokenHash string, tokenType OneTimeTokenType) error {
+	return CreateOneTimeTokenWithOTP(tx, userID, relatesTo, tokenHash, tokenType, "")
+}
+
+func CreateOneTimeTokenWithOTP(tx *storage.Connection, userID uuid.UUID, relatesTo, tokenHash string, tokenType OneTimeTokenType, otpHash string) error {
 	if err := ClearOneTimeTokenForUser(tx, userID, tokenType); err != nil {
 		return err
 	}
@@ -142,6 +147,7 @@ func CreateOneTimeToken(tx *storage.Connection, userID uuid.UUID, relatesTo, tok
 		UserID:    userID,
 		TokenType: tokenType,
 		TokenHash: tokenHash,
+		OTPHash:   otpHash,
 		RelatesTo: strings.ToLower(relatesTo),
 	}
 
@@ -150,6 +156,34 @@ func CreateOneTimeToken(tx *storage.Connection, userID uuid.UUID, relatesTo, tok
 	}
 
 	return nil
+}
+
+// FindEmailTokenByOTP resolves only a code delivered to this address and audience.
+// Its hash is never accepted as the public bearer credential.
+func FindEmailTokenByOTP(tx *storage.Connection, email, aud, otpHash string, first, second OneTimeTokenType) (*OneTimeToken, error) {
+	token := &OneTimeToken{}
+	err := tx.RawQuery(`SELECT token.id, token.user_id, token.token_type, token.token_hash,
+token.otp_hash, token.relates_to, token.created_at, token.updated_at FROM one_time_tokens AS token
+JOIN users AS account ON account.id = token.user_id
+WHERE token.otp_hash = ? AND token.relates_to = ? AND account.aud = ?
+AND (token.token_type = ? OR token.token_type = ?)`, otpHash, strings.ToLower(email), aud, first, second).First(token)
+	if errors.Cause(err) == sql.ErrNoRows {
+		return nil, OneTimeTokenNotFoundError{}
+	}
+	return token, err
+}
+
+// LockUserForEmailVerification serializes code and link redemption with the
+// existing user mutations. Read again after acquiring the lock: a preceding
+// transaction may have consumed or replaced the challenge while we waited.
+func LockUserForEmailVerification(tx *storage.Connection, id uuid.UUID) (*User, error) {
+	var locked struct {
+		ID uuid.UUID `db:"id"`
+	}
+	if err := tx.RawQuery("SELECT id FROM users WHERE id = ? FOR UPDATE", id).First(&locked); err != nil {
+		return nil, err
+	}
+	return FindUserByID(tx, locked.ID)
 }
 
 func FindOneTimeToken(tx *storage.Connection, tokenHash string, tokenTypes ...OneTimeTokenType) (*OneTimeToken, error) {

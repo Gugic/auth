@@ -521,6 +521,22 @@ GOTRUE_SMTP_ADMIN_EMAIL=support@example.com
 GOTRUE_MAILER_SUBJECTS_CONFIRMATION="Please confirm"
 ```
 
+`GOTRUE_MAILER_OTP_MAX_ATTEMPTS` - `number` (default `10`)
+
+Maximum failed email-code verifications per email address and JWT audience within
+the attempt window. The database shares the budget across replicas, client IPs,
+verification types and replacement codes. In-flight attempts reserve budget;
+successful verifications and server errors release their reservation. Exhaustion
+returns the same invalid-code response as an incorrect or expired code.
+
+`GOTRUE_MAILER_OTP_ATTEMPT_WINDOW` - `duration` (default `15m`)
+
+The failure-budget window, starting with the first attempt. Resending a code does
+not reset it. Zero selects the default; negative limits or durations reject startup.
+Email links use an independent 256-bit random credential and remain usable when
+the numeric-code budget is exhausted. Redeeming either credential consumes the
+challenge.
+
 `SMTP_ADMIN_EMAIL` - `string` **required**
 
 The `From` email address for all emails sent.

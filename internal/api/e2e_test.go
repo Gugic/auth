@@ -31,6 +31,16 @@ const defaultPassword = "password"
 
 type M = map[string]any
 
+func assertEmailTokenMapping(t *testing.T, inst *e2ehooks.Instance, email, otp, link string, kind models.OneTimeTokenType) {
+	t.Helper()
+	ott, err := models.FindOneTimeToken(inst.Conn, link, kind)
+	require.NoError(t, err)
+	require.Equal(t, email, ott.RelatesTo)
+	require.Equal(t, crypto.GenerateTokenHash(email, otp), ott.OTPHash)
+	require.NotEqual(t, ott.OTPHash, link)
+	require.Len(t, link, 64)
+}
+
 func genEmail(suffixes ...string) string {
 	uuid := uuid.Must(uuid.NewV4()).String()
 	parts := []string{"e2e_test", uuid}
@@ -196,7 +206,7 @@ func signupAndConfirmEmail(
 	otpHash := crypto.GenerateTokenHash(
 		expUser.GetEmail(), hookReq.EmailData.Token)
 	require.NotEmpty(t, hookReq.EmailData.Token)
-	require.Equal(t, otpHash, hookReq.EmailData.TokenHash)
+	require.NotEqual(t, otpHash, hookReq.EmailData.TokenHash)
 
 	// hook user matches the signup user
 	require.Equal(t, expUser.ID, hookReq.User.ID)
@@ -213,6 +223,7 @@ func signupAndConfirmEmail(
 	require.NoError(t, err)
 	require.Equal(t, expUser.ID.String(), ott.UserID.String())
 	require.Equal(t, expUser.Email.String(), ott.RelatesTo)
+	require.Equal(t, otpHash, ott.OTPHash)
 
 	// OTP token user matches our signup user
 	hookUser, err := models.FindUserByOneTimeToken(
@@ -1183,20 +1194,10 @@ func TestE2EHooks(t *testing.T) {
 				require.Equal(t, curEmail, hookReq.User.Email.String())
 				require.Equal(t, newEmail, hookReq.User.EmailChange)
 
-				// verify otps
-				curOtpHash := crypto.GenerateTokenHash(
-					curEmail, hookReq.EmailData.Token)
-				newOtpHash := crypto.GenerateTokenHash(
-					newEmail, hookReq.EmailData.TokenNew)
-
-				// The hashes are switched incorrectly in the current code, i.e.:
-				//
-				// 	EmailData.TokenHashNew = Hash(CurEmail, EmailData.Token)
-				// 	EmailData.TokenHash    = Hash(NewEmail, EmailData.TokenNew)
-				//
-				// This check locks this behavior in to keep BC with existing hooks
-				require.Equal(t, newOtpHash, hookReq.EmailData.TokenHash)
-				require.Equal(t, curOtpHash, hookReq.EmailData.TokenHashNew)
+				// The hook's unsuffixed hash belongs to the new mailbox;
+				// the suffixed hash belongs to the current mailbox.
+				assertEmailTokenMapping(t, inst, newEmail, hookReq.EmailData.TokenNew, hookReq.EmailData.TokenHash, models.EmailChangeTokenNew)
+				assertEmailTokenMapping(t, inst, curEmail, hookReq.EmailData.Token, hookReq.EmailData.TokenHashNew, models.EmailChangeTokenCurrent)
 
 				// hook user matches the signup user
 				require.Equal(t, signupUser.ID, hookReq.User.ID)
@@ -1312,16 +1313,7 @@ func TestE2EHooks(t *testing.T) {
 				require.Empty(t, hookReq.EmailData.TokenNew)
 				require.Empty(t, hookReq.EmailData.TokenHashNew)
 
-				// verify otps
-				newOtpHash := crypto.GenerateTokenHash(
-					newEmail, hookReq.EmailData.Token)
-
-				// The new email is stored on fields without _new suffix.
-				//
-				// 	EmailData.TokenHash = Hash(NewEmail, EmailData.TokenNew)
-				//
-				// This check locks this behavior in to keep BC with existing hooks
-				require.Equal(t, newOtpHash, hookReq.EmailData.TokenHash)
+				assertEmailTokenMapping(t, inst, newEmail, hookReq.EmailData.Token, hookReq.EmailData.TokenHash, models.EmailChangeTokenNew)
 
 				// verify the EmailData
 				require.Equal(t, mailer.EmailChangeVerification, hookReq.EmailData.EmailActionType)
@@ -1412,16 +1404,7 @@ func TestE2EHooks(t *testing.T) {
 				require.Equal(t, curEmail, hookReq.User.Email.String())
 				require.Equal(t, newEmail, hookReq.User.EmailChange)
 
-				// verify otps
-				newOtpHash := crypto.GenerateTokenHash(
-					newEmail, hookReq.EmailData.Token)
-
-				// The new email is stored on fields without _new suffix.
-				//
-				// 	EmailData.TokenHash = Hash(NewEmail, EmailData.TokenNew)
-				//
-				// This check locks this behavior in to keep BC with existing hooks
-				require.Equal(t, newOtpHash, hookReq.EmailData.TokenHash)
+				assertEmailTokenMapping(t, inst, newEmail, hookReq.EmailData.Token, hookReq.EmailData.TokenHash, models.EmailChangeTokenNew)
 
 				// hook user matches the signup user
 				require.Equal(t, signupUser.ID, hookReq.User.ID)
@@ -1537,16 +1520,7 @@ func TestE2EHooks(t *testing.T) {
 				require.Empty(t, hookReq.EmailData.TokenNew)
 				require.Empty(t, hookReq.EmailData.TokenHashNew)
 
-				// verify otps
-				newOtpHash := crypto.GenerateTokenHash(
-					newEmail, hookReq.EmailData.Token)
-
-				// The new email is stored on fields without _new suffix.
-				//
-				// 	EmailData.TokenHash = Hash(NewEmail, EmailData.TokenNew)
-				//
-				// This check locks this behavior in to keep BC with existing hooks
-				require.Equal(t, newOtpHash, hookReq.EmailData.TokenHash)
+				assertEmailTokenMapping(t, inst, newEmail, hookReq.EmailData.Token, hookReq.EmailData.TokenHash, models.EmailChangeTokenNew)
 
 				// verify the EmailData
 				require.Equal(t, mailer.EmailChangeVerification, hookReq.EmailData.EmailActionType)

@@ -661,8 +661,10 @@ type MailerConfiguration struct {
 
 	SecureEmailChangeEnabled bool `json:"secure_email_change_enabled" split_words:"true" default:"true"`
 
-	OtpExp    uint `json:"otp_exp" split_words:"true"`
-	OtpLength int  `json:"otp_length" split_words:"true"`
+	OtpExp           uint          `json:"otp_exp" split_words:"true"`
+	OtpLength        int           `json:"otp_length" split_words:"true"`
+	OtpMaxAttempts   int           `json:"otp_max_attempts" split_words:"true"`
+	OtpAttemptWindow time.Duration `json:"otp_attempt_window" split_words:"true"`
 
 	ExternalHosts []string `json:"external_hosts" split_words:"true"`
 
@@ -695,7 +697,20 @@ type MailerConfiguration struct {
 	blockedMXRecordsVal cachedValue[map[string]bool]     `json:"-"`
 }
 
+func (c *MailerConfiguration) applyOTPDefaults() {
+	if c.OtpMaxAttempts == 0 {
+		c.OtpMaxAttempts = 10
+	}
+	if c.OtpAttemptWindow == 0 {
+		c.OtpAttemptWindow = 15 * time.Minute
+	}
+}
+
 func (c *MailerConfiguration) Validate() error {
+	c.applyOTPDefaults()
+	if c.OtpMaxAttempts < 0 || c.OtpAttemptWindow < 0 {
+		return errors.New("mailer OTP attempt limit and window must be positive")
+	}
 	c.serviceHeadersVal = c.buildServiceHeaders()
 	c.blockedMXRecordsVal = c.buildBlockedMXRecords()
 	return nil
@@ -1129,6 +1144,7 @@ func (config *GlobalConfiguration) PopulateGlobal() error {
 
 // ApplyDefaults sets defaults for a GlobalConfiguration
 func (config *GlobalConfiguration) ApplyDefaults() error {
+	config.Mailer.applyOTPDefaults()
 	if config.JWT.AdminGroupName == "" {
 		config.JWT.AdminGroupName = "admin"
 	}
